@@ -1,0 +1,138 @@
+package me.blockshop.auction;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+public class AuctionCommand implements CommandExecutor {
+
+    private final AuctionPlugin plugin;
+
+    public AuctionCommand(AuctionPlugin plugin) {
+        this.plugin = plugin;
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player player)) return true;
+
+        if (args.length > 0 && args[0].equalsIgnoreCase("sell")) {
+            if (args.length < 2) {
+                player.sendMessage(Component.text("Использование: /ah sell <цена>", NamedTextColor.RED));
+                return true;
+            }
+            
+            double price;
+            try {
+                price = Double.parseDouble(args[1]);
+                if (price < 0) throw new NumberFormatException();
+            } catch (NumberFormatException e) {
+                player.sendMessage(Component.text("Введите корректную цену!", NamedTextColor.RED));
+                return true;
+            }
+
+            sellItem(player, price);
+            return true;
+        }
+
+        openMainGui(player);
+        return true;
+    }
+
+    public void openMainGui(Player player) {
+        Inventory inv = Bukkit.createInventory(null, 54, Component.text("Аукцион BlockShop"));
+
+        // Заполнение границ
+        ItemStack filler = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        ItemMeta fMeta = filler.getItemMeta();
+        fMeta.displayName(Component.text(" "));
+        filler.setItemMeta(fMeta);
+
+        for (int i : new int[]{0,1,2,3,4,5,6,7,8, 9,17, 18,26, 27,35, 36,44, 45,46,47,48,49,50,51,52,53}) {
+            inv.setItem(i, filler);
+        }
+
+        // Слот 1: Инфо (Голова)
+        ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta sMeta = (SkullMeta) head.getItemMeta();
+        sMeta.setOwningPlayer(player);
+        sMeta.displayName(Component.text(player.getName(), NamedTextColor.GREEN));
+        // Если есть Vault, тут берем баланс:
+        sMeta.lore(List.of(Component.text("Ваш баланс: ", NamedTextColor.GRAY)
+                .append(Component.text("Загрузка...", NamedTextColor.GOLD))));
+        head.setItemMeta(sMeta);
+        inv.setItem(0, head);
+
+        // Слот 3: Мои товары
+        ItemStack chest = new ItemStack(Material.CHEST);
+        ItemMeta cMeta = chest.getItemMeta();
+        cMeta.displayName(Component.text("Мои лоты", NamedTextColor.YELLOW));
+        chest.setItemMeta(cMeta);
+        inv.setItem(2, chest);
+
+        // Слот 6: Обновить
+        ItemStack refresh = new ItemStack(Material.SUNFLOWER);
+        ItemMeta rMeta = refresh.getItemMeta();
+        rMeta.displayName(Component.text("Обновить страницу", NamedTextColor.AQUA));
+        refresh.setItemMeta(rMeta);
+        inv.setItem(5, refresh);
+
+        // Вывод лотов из конфига (центральная часть)
+        int slot = 10;
+        if (plugin.getConfig().getConfigurationSection("items") != null) {
+            for (String id : plugin.getConfig().getConfigurationSection("items").getKeys(false)) {
+                if (slot > 43) break; // Чтобы не вылезало за границы
+                if (slot % 9 == 8) slot += 2; // Пропуск боковых слотов
+
+                ItemStack item = plugin.getConfig().getItemStack("items." + id + ".item");
+                double itemPrice = plugin.getConfig().getDouble("items." + id + ".price");
+                String owner = plugin.getConfig().getString("items." + id + ".ownerName");
+
+                ItemStack display = item.clone();
+                ItemMeta dMeta = display.getItemMeta();
+                List<Component> lore = dMeta.hasLore() ? dMeta.lore() : new ArrayList<>();
+                lore.add(Component.text("----------------", NamedTextColor.DARK_GRAY));
+                lore.add(Component.text("Продавец: " + owner, NamedTextColor.GRAY));
+                lore.add(Component.text("Цена: " + itemPrice + "$", NamedTextColor.GOLD));
+                dMeta.lore(lore);
+                display.setItemMeta(dMeta);
+
+                inv.setItem(slot, display);
+                slot++;
+            }
+        }
+
+        player.openInventory(inv);
+    }
+
+    private void sellItem(Player player, double price) {
+        ItemStack item = player.getInventory().getItemInMainHand();
+        if (item.getType() == Material.AIR) {
+            player.sendMessage(Component.text("Вы не держите предмет в руке!", NamedTextColor.RED));
+            return;
+        }
+
+        String id = UUID.randomUUID().toString();
+        plugin.getConfig().set("items." + id + ".item", item);
+        plugin.getConfig().set("items." + id + ".price", price);
+        plugin.getConfig().set("items." + id + ".owner", player.getUniqueId().toString());
+        plugin.getConfig().set("items." + id + ".ownerName", player.getName());
+        plugin.saveConfig();
+
+        player.getInventory().setItemInMainHand(null);
+        player.sendMessage(Component.text("Предмет успешно выставлен за " + price + "$!", NamedTextColor.GREEN));
+    }
+}
