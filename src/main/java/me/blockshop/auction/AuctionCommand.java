@@ -42,7 +42,6 @@ public class AuctionCommand implements CommandExecutor {
     public void openMainGui(Player player) {
         Inventory inv = Bukkit.createInventory(null, 54, Component.text("Аукцион BlockShop", NamedTextColor.DARK_GRAY));
         
-        // Заполнитель (стекло по бокам)
         ItemStack filler = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta fMeta = filler.getItemMeta();
         if (fMeta != null) {
@@ -62,6 +61,7 @@ public class AuctionCommand implements CommandExecutor {
 
                 ItemStack item = plugin.getConfig().getItemStack("items." + key + ".item");
                 double price = plugin.getConfig().getDouble("items." + key + ".price");
+                String owner = plugin.getConfig().getString("items." + key + ".owner", "Неизвестно");
                 
                 if (item != null) {
                     ItemStack display = item.clone();
@@ -71,6 +71,7 @@ public class AuctionCommand implements CommandExecutor {
                         if (lore == null) lore = new ArrayList<>();
                         lore.add(Component.text(" "));
                         lore.add(Component.text("Цена: ", NamedTextColor.GRAY).append(Component.text(price + "$", NamedTextColor.GOLD)).decoration(TextDecoration.ITALIC, false));
+                        lore.add(Component.text("Продавец: ", NamedTextColor.GRAY).append(Component.text(owner, NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false));
                         lore.add(Component.text("Нажмите для покупки", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
                         dMeta.lore(lore);
                         display.setItemMeta(dMeta);
@@ -96,6 +97,10 @@ public class AuctionCommand implements CommandExecutor {
 
         try {
             double price = Double.parseDouble(args[1]);
+            if (price < 0) {
+                player.sendMessage(Component.text("Цена не может быть отрицательной!", NamedTextColor.RED));
+                return;
+            }
             String id = UUID.randomUUID().toString();
             plugin.getConfig().set("items." + id + ".item", item);
             plugin.getConfig().set("items." + id + ".price", price);
