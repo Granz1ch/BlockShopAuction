@@ -82,36 +82,49 @@ public class AuctionListener implements Listener {
 
     private void confirmPurchase(Player player) {
         if (lastClickedId == null || lastClickedId.isEmpty()) return;
+        
         if (plugin.getConfig().get("items." + lastClickedId) == null) {
-            player.sendMessage(Component.text("Товар уже продан!", NamedTextColor.RED));
+            player.sendMessage(Component.text("Товар уже продан или снят!", NamedTextColor.RED));
             player.closeInventory();
             return;
         }
 
         double price = plugin.getConfig().getDouble("items." + lastClickedId + ".price");
-        
-        // Получаем баланс через PlaceholderAPI
+        String ownerName = plugin.getConfig().getString("items." + lastClickedId + ".owner");
+
         String balanceStr = PlaceholderAPI.setPlaceholders(player, "%vault_eco_balance%");
-        balanceStr = balanceStr.replaceAll("[^0-9.]", ""); // Оставляем только цифры и точку
+        balanceStr = balanceStr.replaceAll("[^0-9.]", ""); 
         
         try {
             double balance = Double.parseDouble(balanceStr);
             if (balance >= price) {
+                // Списываем у покупателя
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco take " + player.getName() + " " + price);
-                ItemStack item = plugin.getConfig().getItemStack("items." + lastClickedId + ".item");
                 
+                // Начисляем продавцу
+                if (ownerName != null) {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco give " + ownerName + " " + price);
+                    Player owner = Bukkit.getPlayer(ownerName);
+                    if (owner != null && owner.isOnline()) {
+                        owner.sendMessage(Component.text("Ваш лот куплен! Вы получили " + price + "$", NamedTextColor.GREEN));
+                    }
+                }
+
+                // Выдача предмета
+                ItemStack item = plugin.getConfig().getItemStack("items." + lastClickedId + ".item");
                 if (item != null) player.getInventory().addItem(item);
                 
                 plugin.getConfig().set("items." + lastClickedId, null);
                 plugin.saveConfig();
                 
-                player.sendMessage(Component.text("Успешная покупка!", NamedTextColor.GREEN));
+                player.sendMessage(Component.text("Покупка завершена!", NamedTextColor.GREEN));
                 player.closeInventory();
             } else {
                 player.sendMessage(Component.text("Недостаточно денег!", NamedTextColor.RED));
+                player.closeInventory();
             }
         } catch (Exception e) {
-            player.sendMessage(Component.text("Ошибка экономики!", NamedTextColor.RED));
+            player.sendMessage(Component.text("Ошибка транзакции!", NamedTextColor.RED));
         }
     }
 }
