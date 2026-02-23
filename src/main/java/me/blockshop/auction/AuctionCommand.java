@@ -8,6 +8,7 @@ import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -28,7 +29,10 @@ public class AuctionCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (!(sender instanceof Player player)) return true;
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("Только игроки могут использовать эту команду!");
+            return true;
+        }
 
         if (args.length > 0 && args[0].equalsIgnoreCase("sell")) {
             handleSell(player, args);
@@ -40,10 +44,8 @@ public class AuctionCommand implements CommandExecutor {
     }
 
     public void openMainGui(Player player) {
-        // Создаем инвентарь
         Inventory inv = Bukkit.createInventory(null, 54, Component.text("Аукцион BlockShop", NamedTextColor.DARK_GRAY));
         
-        // Предмет-заполнитель
         ItemStack filler = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta fMeta = filler.getItemMeta();
         if (fMeta != null) {
@@ -51,26 +53,20 @@ public class AuctionCommand implements CommandExecutor {
             filler.setItemMeta(fMeta);
         }
 
-        // Рисуем рамку
         int[] borders = {0,1,2,3,4,5,6,7,8, 9,17, 18,26, 27,35, 36,44, 45,46,47,48,49,50,51,52,53};
-        for (int i : borders) inv.setItem(i, filler);
-
-        // Голова игрока (инфо)
-        ItemStack head = new ItemStack(Material.PLAYER_HEAD);
-        SkullMeta sMeta = (SkullMeta) head.getItemMeta();
-        if (sMeta != null) {
-            sMeta.setOwningPlayer(player);
-            sMeta.displayName(Component.text(player.getName(), NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
-            head.setItemMeta(sMeta);
+        for (int i : borders) {
+            inv.setItem(i, filler);
         }
-        inv.setItem(0, head);
 
-        // Отображение товаров
-        if (plugin.getConfig().getConfigurationSection("items") != null) {
+        ConfigurationSection section = plugin.getConfig().getConfigurationSection("items");
+        if (section != null) {
             int slot = 10;
-            for (String key : plugin.getConfig().getConfigurationSection("items").getKeys(false)) {
+            for (String key : section.getKeys(false)) {
                 if (slot > 43) break;
-                if (slot % 9 == 8 || slot % 9 == 0) slot++;
+                // Пропуск крайних слотов рамки
+                if (slot % 9 == 0 || slot % 9 == 8) {
+                    slot++;
+                }
 
                 ItemStack item = plugin.getConfig().getItemStack("items." + key + ".item");
                 double price = plugin.getConfig().getDouble("items." + key + ".price");
@@ -116,7 +112,7 @@ public class AuctionCommand implements CommandExecutor {
         try {
             double price = Double.parseDouble(args[1]);
             if (price < 0) {
-                player.sendMessage(Component.text("Цена не может быть отрицательной!", NamedTextColor.RED));
+                player.sendMessage(Component.text("Цена не может быть меньше 0!", NamedTextColor.RED));
                 return;
             }
 
@@ -127,9 +123,9 @@ public class AuctionCommand implements CommandExecutor {
             plugin.saveConfig();
 
             player.getInventory().setItemInMainHand(null);
-            player.sendMessage(Component.text("Предмет выставлен за " + price + "$", NamedTextColor.GREEN));
+            player.sendMessage(Component.text("Предмет выставлен на аукцион!", NamedTextColor.GREEN));
         } catch (NumberFormatException e) {
-            player.sendMessage(Component.text("Введите корректное число для цены!", NamedTextColor.RED));
+            player.sendMessage(Component.text("Укажите число в качестве цены!", NamedTextColor.RED));
         }
     }
 }
