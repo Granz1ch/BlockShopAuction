@@ -13,7 +13,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.SkullMeta;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -29,10 +28,7 @@ public class AuctionCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("Только игроки могут использовать эту команду!");
-            return true;
-        }
+        if (!(sender instanceof Player player)) return true;
 
         if (args.length > 0 && args[0].equalsIgnoreCase("sell")) {
             handleSell(player, args);
@@ -46,6 +42,7 @@ public class AuctionCommand implements CommandExecutor {
     public void openMainGui(Player player) {
         Inventory inv = Bukkit.createInventory(null, 54, Component.text("Аукцион BlockShop", NamedTextColor.DARK_GRAY));
         
+        // Заполнитель (стекло по бокам)
         ItemStack filler = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta fMeta = filler.getItemMeta();
         if (fMeta != null) {
@@ -54,19 +51,14 @@ public class AuctionCommand implements CommandExecutor {
         }
 
         int[] borders = {0,1,2,3,4,5,6,7,8, 9,17, 18,26, 27,35, 36,44, 45,46,47,48,49,50,51,52,53};
-        for (int i : borders) {
-            inv.setItem(i, filler);
-        }
+        for (int i : borders) inv.setItem(i, filler);
 
         ConfigurationSection section = plugin.getConfig().getConfigurationSection("items");
         if (section != null) {
             int slot = 10;
             for (String key : section.getKeys(false)) {
                 if (slot > 43) break;
-                // Пропуск крайних слотов рамки
-                if (slot % 9 == 0 || slot % 9 == 8) {
-                    slot++;
-                }
+                if (slot % 9 == 0 || slot % 9 == 8) slot++;
 
                 ItemStack item = plugin.getConfig().getItemStack("items." + key + ".item");
                 double price = plugin.getConfig().getDouble("items." + key + ".price");
@@ -77,14 +69,9 @@ public class AuctionCommand implements CommandExecutor {
                     if (dMeta != null) {
                         List<Component> lore = dMeta.hasLore() ? dMeta.lore() : new ArrayList<>();
                         if (lore == null) lore = new ArrayList<>();
-                        
                         lore.add(Component.text(" "));
-                        lore.add(Component.text("Цена: ", NamedTextColor.GRAY)
-                                .append(Component.text(price + "$", NamedTextColor.GOLD))
-                                .decoration(TextDecoration.ITALIC, false));
-                        lore.add(Component.text("Нажмите, чтобы купить", NamedTextColor.YELLOW)
-                                .decoration(TextDecoration.ITALIC, false));
-                        
+                        lore.add(Component.text("Цена: ", NamedTextColor.GRAY).append(Component.text(price + "$", NamedTextColor.GOLD)).decoration(TextDecoration.ITALIC, false));
+                        lore.add(Component.text("Нажмите для покупки", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
                         dMeta.lore(lore);
                         display.setItemMeta(dMeta);
                     }
@@ -98,12 +85,10 @@ public class AuctionCommand implements CommandExecutor {
 
     private void handleSell(Player player, String[] args) {
         ItemStack item = player.getInventory().getItemInMainHand();
-        
         if (item.getType() == Material.AIR) {
             player.sendMessage(Component.text("Возьмите предмет в руку!", NamedTextColor.RED));
             return;
         }
-        
         if (args.length < 2) {
             player.sendMessage(Component.text("Использование: /ah sell <цена>", NamedTextColor.RED));
             return;
@@ -111,11 +96,6 @@ public class AuctionCommand implements CommandExecutor {
 
         try {
             double price = Double.parseDouble(args[1]);
-            if (price < 0) {
-                player.sendMessage(Component.text("Цена не может быть меньше 0!", NamedTextColor.RED));
-                return;
-            }
-
             String id = UUID.randomUUID().toString();
             plugin.getConfig().set("items." + id + ".item", item);
             plugin.getConfig().set("items." + id + ".price", price);
@@ -123,9 +103,9 @@ public class AuctionCommand implements CommandExecutor {
             plugin.saveConfig();
 
             player.getInventory().setItemInMainHand(null);
-            player.sendMessage(Component.text("Предмет выставлен на аукцион!", NamedTextColor.GREEN));
+            player.sendMessage(Component.text("Предмет выставлен за " + price + "$", NamedTextColor.GREEN));
         } catch (NumberFormatException e) {
-            player.sendMessage(Component.text("Укажите число в качестве цены!", NamedTextColor.RED));
+            player.sendMessage(Component.text("Ошибка: укажите число!", NamedTextColor.RED));
         }
     }
 }
