@@ -19,7 +19,7 @@ import java.util.List;
 
 public class AuctionListener implements Listener {
     private final AuctionPlugin plugin;
-    private String lastClickedId = ""; // Упрощенное хранение для примера
+    private String lastClickedId = ""; 
 
     public AuctionListener(AuctionPlugin plugin) {
         this.plugin = plugin;
@@ -27,7 +27,7 @@ public class AuctionListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(@NotNull InventoryClickEvent event) {
-        Player player = (Player) event.getWhoClicked();
+        if (!(event.getWhoClicked() instanceof Player player)) return;
         String title = PlainTextComponentSerializer.plainText().serialize(event.getView().title());
 
         if (title.contains("Аукцион BlockShop")) {
@@ -35,7 +35,7 @@ public class AuctionListener implements Listener {
             if (event.getRawSlot() >= 10 && event.getRawSlot() <= 43) {
                 handleMainClick(player, event.getRawSlot());
             }
-        } else if (title.contains("Подтверждение покупки")) {
+        } else if (title.contains("Подтверждение")) {
             event.setCancelled(true);
             if (event.getRawSlot() == 11) confirmPurchase(player);
             if (event.getRawSlot() == 15) player.closeInventory();
@@ -44,34 +44,36 @@ public class AuctionListener implements Listener {
 
     private void handleMainClick(Player player, int slot) {
         if (plugin.getConfig().getConfigurationSection("items") == null) return;
-        
-        // Поиск ID лота по слоту
         int currentSlot = 10;
         for (String key : plugin.getConfig().getConfigurationSection("items").getKeys(false)) {
-            if (currentSlot % 9 == 8 || currentSlot % 9 == 0) currentSlot++;
+            while (currentSlot % 9 == 8 || currentSlot % 9 == 0) currentSlot++;
             if (currentSlot == slot) {
                 lastClickedId = key;
                 openConfirmMenu(player, key);
-                break;
+                return;
             }
             currentSlot++;
         }
     }
 
     private void openConfirmMenu(Player player, String key) {
-        Inventory gui = Bukkit.createInventory(null, 27, Component.text("Подтверждение покупки"));
+        Inventory gui = Bukkit.createInventory(null, 27, Component.text("Подтверждение"));
         double price = plugin.getConfig().getDouble("items." + key + ".price");
 
         ItemStack buy = new ItemStack(Material.GREEN_WOOL);
         ItemMeta bMeta = buy.getItemMeta();
-        bMeta.displayName(Component.text("ПОДТВЕРДИТЬ КУПЛЮ", NamedTextColor.GREEN));
-        bMeta.lore(List.of(Component.text("Цена: " + price + "$", NamedTextColor.GOLD)));
-        buy.setItemMeta(bMeta);
+        if (bMeta != null) {
+            bMeta.displayName(Component.text("КУПИТЬ", NamedTextColor.GREEN));
+            bMeta.lore(List.of(Component.text("Цена: " + price + "$", NamedTextColor.GOLD)));
+            buy.setItemMeta(bMeta);
+        }
 
         ItemStack cancel = new ItemStack(Material.RED_WOOL);
         ItemMeta cMeta = cancel.getItemMeta();
-        cMeta.displayName(Component.text("ОТМЕНИТЬ", NamedTextColor.RED));
-        cancel.setItemMeta(cMeta);
+        if (cMeta != null) {
+            cMeta.displayName(Component.text("ОТМЕНА", NamedTextColor.RED));
+            cancel.setItemMeta(cMeta);
+        }
 
         gui.setItem(11, buy);
         gui.setItem(15, cancel);
@@ -79,13 +81,21 @@ public class AuctionListener implements Listener {
     }
 
     private void confirmPurchase(Player player) {
-        if (lastClickedId.isEmpty() || plugin.getConfig().get("items." + lastClickedId) == null) return;
+        if (lastClickedId == null || lastClickedId.isEmpty()) return;
+        if (plugin.getConfig().get("items." + lastClickedId) == null) {
+            player.sendMessage(Component.text("Товар уже продан!", NamedTextColor.RED));
+            player.closeInventory();
+            return;
+        }
 
         double price = plugin.getConfig().getDouble("items." + lastClickedId + ".price");
-        String balanceRaw = PlaceholderAPI.setPlaceholders(player, "%vault_eco_balance%");
+        
+        // Получаем баланс через PlaceholderAPI
+        String balanceStr = PlaceholderAPI.setPlaceholders(player, "%vault_eco_balance%");
+        balanceStr = balanceStr.replaceAll("[^0-9.]", ""); // Оставляем только цифры и точку
         
         try {
-            double balance = Double.parseDouble(balanceRaw.replace(",", ""));
+            double balance = Double.parseDouble(balanceStr);
             if (balance >= price) {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco take " + player.getName() + " " + price);
                 ItemStack item = plugin.getConfig().getItemStack("items." + lastClickedId + ".item");
@@ -95,11 +105,10 @@ public class AuctionListener implements Listener {
                 plugin.getConfig().set("items." + lastClickedId, null);
                 plugin.saveConfig();
                 
-                player.sendMessage(Component.text("Покупка успешна!", NamedTextColor.GREEN));
+                player.sendMessage(Component.text("Успешная покупка!", NamedTextColor.GREEN));
                 player.closeInventory();
             } else {
                 player.sendMessage(Component.text("Недостаточно денег!", NamedTextColor.RED));
-                player.closeInventory();
             }
         } catch (Exception e) {
             player.sendMessage(Component.text("Ошибка экономики!", NamedTextColor.RED));
