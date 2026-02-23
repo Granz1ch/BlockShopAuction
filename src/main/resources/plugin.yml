@@ -1,0 +1,7 @@
+name: BlockShopAuction
+version: 1.0
+main: me.blockshop.auction.AuctionPlugin
+api-version: '1.21'
+commands:
+  auction:
+    aliases: [ah, ac]
