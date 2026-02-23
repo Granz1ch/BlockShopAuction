@@ -5,3 +5,4 @@ api-version: '1.21'
 commands:
   auction:
     aliases: [ah, ac]
+    description: Главное меню аукциона
