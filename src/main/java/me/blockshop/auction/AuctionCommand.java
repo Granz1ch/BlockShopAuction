@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.UUID;
 
 public class AuctionCommand implements CommandExecutor {
-
     private final AuctionPlugin plugin;
 
     public AuctionCommand(AuctionPlugin plugin) {
@@ -42,7 +41,8 @@ public class AuctionCommand implements CommandExecutor {
 
     public void openMainGui(Player player) {
         Inventory inv = Bukkit.createInventory(null, 54, Component.text("Аукцион BlockShop", NamedTextColor.DARK_GRAY));
-
+        
+        // Заполнитель
         ItemStack filler = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta fMeta = filler.getItemMeta();
         fMeta.displayName(Component.text(" "));
@@ -51,34 +51,40 @@ public class AuctionCommand implements CommandExecutor {
         int[] borders = {0,1,2,3,4,5,6,7,8, 9,17, 18,26, 27,35, 36,44, 45,46,47,48,49,50,51,52,53};
         for (int i : borders) inv.setItem(i, filler);
 
+        // Инфо игрока
         ItemStack head = new ItemStack(Material.PLAYER_HEAD);
         SkullMeta sMeta = (SkullMeta) head.getItemMeta();
         sMeta.setOwningPlayer(player);
-        sMeta.displayName(player.name().color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
+        sMeta.displayName(Component.text(player.getName(), NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
         head.setItemMeta(sMeta);
         inv.setItem(0, head);
 
-        ItemStack refresh = new ItemStack(Material.SUNFLOWER);
-        ItemMeta rMeta = refresh.getItemMeta();
-        rMeta.displayName(Component.text("Обновить страницу", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false));
-        refresh.setItemMeta(rMeta);
-        inv.setItem(5, refresh);
-
-        // Логика отображения предметов из конфига
+        // Загрузка лотов
         if (plugin.getConfig().getConfigurationSection("items") != null) {
             int slot = 10;
             for (String key : plugin.getConfig().getConfigurationSection("items").getKeys(false)) {
                 if (slot > 43) break;
-                if (slot % 9 == 8 || slot % 9 == 0) slot++; 
+                if (slot % 9 == 8 || slot % 9 == 0) slot++;
 
                 ItemStack item = plugin.getConfig().getItemStack("items." + key + ".item");
+                double price = plugin.getConfig().getDouble("items." + key + ".price");
+                
                 if (item != null) {
-                    inv.setItem(slot, item);
+                    ItemStack display = item.clone();
+                    ItemMeta dMeta = display.getItemMeta();
+                    List<Component> lore = dMeta.hasLore() ? dMeta.lore() : new ArrayList<>();
+                    lore.add(Component.text(" "));
+                    lore.add(Component.text("Цена: ", NamedTextColor.GRAY).append(Component.text(price + "$", NamedTextColor.GOLD)).decoration(TextDecoration.ITALIC, false));
+                    lore.add(Component.text("Нажмите, чтобы купить", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+                    dMeta.lore(lore);
+                    display.setItemMeta(dMeta);
+                    
+                    inv.setItem(slot, display);
+                    // Сохраняем ID лота в имени или PDC (здесь упрощенно через lore или скрытый список)
                     slot++;
                 }
             }
         }
-
         player.openInventory(inv);
     }
 
@@ -93,12 +99,18 @@ public class AuctionCommand implements CommandExecutor {
             return;
         }
 
-        String id = UUID.randomUUID().toString();
-        plugin.getConfig().set("items." + id + ".item", item);
-        plugin.getConfig().set("items." + id + ".price", args[1]);
-        plugin.saveConfig();
-        
-        player.getInventory().setItemInMainHand(null);
-        player.sendMessage(Component.text("Предмет выставлен на аукцион!", NamedTextColor.GREEN));
+        try {
+            double price = Double.parseDouble(args[1]);
+            String id = UUID.randomUUID().toString();
+            plugin.getConfig().set("items." + id + ".item", item);
+            plugin.getConfig().set("items." + id + ".price", price);
+            plugin.getConfig().set("items." + id + ".owner", player.getName());
+            plugin.saveConfig();
+
+            player.getInventory().setItemInMainHand(null);
+            player.sendMessage(Component.text("Предмет выставлен за " + price + "$", NamedTextColor.GREEN));
+        } catch (NumberFormatException e) {
+            player.sendMessage(Component.text("Некорректная цена!", NamedTextColor.RED));
+        }
     }
 }
